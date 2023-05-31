@@ -1,15 +1,17 @@
+use error_stack::{IntoReport, Result, ResultExt};
 use strum::{Display, EnumString};
 
 #[derive(thiserror::Error, Debug)]
+#[error("dfdf")]
 pub enum Error {
     #[error("Failed to get development environment")]
-    EnvironmentVariableParsing(#[from] strum::ParseError),
+    EnvironmentVariableParsing,
     #[error("Failed to get access to working directory")]
-    WorkingDirectoryAccess(#[from] std::io::Error),
+    WorkingDirectoryAccess,
     #[error("Failed to set specs for config")]
-    Builder(#[from] ConfigBuilderError),
+    Builder,
     #[error("Failed to build config")]
-    ConfigBuild(#[from] config::ConfigError),
+    ConfigBuild,
 }
 
 #[derive(derive_builder::Builder, Debug, Clone)]
@@ -35,15 +37,23 @@ impl ConfigBuilder {
             environment_variables_source_prefix,
             environment_variables_source_prefix_separator,
             environment_variables_source_separator,
-        } = self.prepare().map_err(Into::<Error>::into)?;
+        } = self
+            .prepare()
+            .into_report()
+            .change_context(Error::Builder)?;
 
         let environment = match std::env::var(environment_variable_name) {
-            Ok(env) => env.parse().map_err(Into::<Error>::into)?,
+            Ok(env) => env
+                .parse()
+                .into_report()
+                .change_context(Error::EnvironmentVariableParsing)
+                .attach_printable_lazy(|| format!(""))?,
             Err(_) => Environment::default(),
         };
 
         let working_directory = std::env::current_dir()
-            .map_err(Into::<Error>::into)?
+            .into_report()
+            .change_context(Error::WorkingDirectoryAccess)?
             .join(config_directory)
             .join(environment.to_string());
 
@@ -58,7 +68,8 @@ impl ConfigBuilder {
             .add_source(env_vars_source)
             .build()
             .and_then(|cfg| cfg.try_deserialize())
-            .map_err(Into::into)
+            .into_report()
+            .change_context(Error::ConfigBuild)
     }
 }
 
