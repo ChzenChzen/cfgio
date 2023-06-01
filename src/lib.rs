@@ -62,7 +62,7 @@ impl ConfigBuilder {
             .join(config_directory)
             .join(environment.to_string());
 
-        let file_source = config::File::from(working_directory).required(false);
+        let file_source = config::File::from(working_directory);
         let env_vars_source =
             config::Environment::with_prefix(&environment_variables_source_prefix)
                 .prefix_separator(&environment_variables_source_prefix_separator)
