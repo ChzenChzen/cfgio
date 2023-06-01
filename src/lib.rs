@@ -1,18 +1,24 @@
 use error_stack::{IntoReport, Result, ResultExt};
 use strum::{Display, EnumString};
+use thiserror::Error as ThisError;
 
-#[derive(thiserror::Error, Debug)]
-#[error("dfdf")]
-pub enum Error {
-    #[error("Failed to get development environment")]
-    EnvironmentVariableParsing,
+#[derive(ThisError, Debug)]
+pub enum Reason {
+    #[error("Failed to parse development environment from value `{0}`")]
+    EnvironmentVariableParsing(String),
     #[error("Failed to get access to working directory")]
     WorkingDirectoryAccess,
-    #[error("Failed to set specs for config")]
-    Builder,
-    #[error("Failed to build config")]
-    ConfigBuild,
+    #[error("Failed to set config's specifications")]
+    Preparation,
+    #[error("Failed to compose config schema from sources")]
+    ComposeSchema,
+    #[error("Failed to deserialize config from schema")]
+    Deserialization,
 }
+
+#[derive(ThisError, Debug)]
+#[error("Failed to build config. Reason: {0}")]
+pub struct Error(pub Reason);
 
 #[derive(derive_builder::Builder, Debug, Clone)]
 #[builder(build_fn(private, name = "prepare"))]
@@ -40,20 +46,19 @@ impl ConfigBuilder {
         } = self
             .prepare()
             .into_report()
-            .change_context(Error::Builder)?;
+            .change_context(Error(Reason::Preparation))?;
 
         let environment = match std::env::var(environment_variable_name) {
             Ok(env) => env
                 .parse()
                 .into_report()
-                .change_context(Error::EnvironmentVariableParsing)
-                .attach_printable_lazy(|| format!(""))?,
+                .change_context_lazy(|| Error(Reason::EnvironmentVariableParsing(env)))?,
             Err(_) => Environment::default(),
         };
 
         let working_directory = std::env::current_dir()
             .into_report()
-            .change_context(Error::WorkingDirectoryAccess)?
+            .change_context(Error(Reason::WorkingDirectoryAccess))?
             .join(config_directory)
             .join(environment.to_string());
 
@@ -67,9 +72,11 @@ impl ConfigBuilder {
             .add_source(file_source)
             .add_source(env_vars_source)
             .build()
-            .and_then(|cfg| cfg.try_deserialize())
             .into_report()
-            .change_context(Error::ConfigBuild)
+            .change_context(Error(Reason::ComposeSchema))?
+            .try_deserialize()
+            .into_report()
+            .change_context(Error(Reason::Deserialization))
     }
 }
 
