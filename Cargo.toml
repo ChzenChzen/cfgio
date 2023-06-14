@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 thiserror = "1.0.40"
-error-stack = "0.3.1"
 config = { version = "0.13.3", features = ["toml"] }
 serde = { version = "1.0.162", features = ["derive"] }
 strum = { version = "0.24.1", features = ["derive"] }
